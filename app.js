@@ -2,7 +2,7 @@
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
-const cfg=Object.assign({mock:true,base:'',token:'',poll:5,day:false,auth:'session',user:''},store.get('gs_cfg',{}));
+const cfg=Object.assign({mock:true,base:'https://scada.yourdomain.com',poll:5,day:false,user:''},store.get('gs_cfg',{}));
 
 /* ---- Mock data (same shape the adapter returns) ---- */
 const mock={tanks:[],pumps:[],alarms:[{id:'A1001',tag:'WW-12.LevelHigh',text:'Wet well high level',sev:'HIGH',time:new Date(Date.now()-420000).toISOString(),ack:false},{id:'A1002',tag:'PRV-07.PressLow',text:'PRV-07 outlet pressure low',sev:'MED',time:new Date(Date.now()-3600000).toISOString(),ack:false}]};
@@ -11,42 +11,29 @@ buildMock();
 function mockTick(){mock.tanks.forEach(t=>{t.v=Math.min(t.hi*1.1,Math.max(0,+(t.v+(Math.random()-.5)*(t.hi-t.lo)/60).toFixed(1)))})}
 
 /* ---- Adapter: edit paths here to match your GeoSCADA REST gateway ---- */
-/* ---- Authentication: session login (POST form to logon URL), HTTP Basic, or static Bearer ---- */
-let tok=null,loggedIn=false;
+/* ---- Authentication: HTTP Basic, HTTPS only. Password lives in sessionStorage (cleared when the app closes). ---- */
 const pw=()=>{try{return sessionStorage.getItem('gs_pw')||''}catch{return ''}};
-const b64=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
-const baseUrl=()=>cfg.base.replace(/\/$/,'');
-async function login(){
- if(!cfg.user||!pw())throw new Error('Enter username and password in settings');
- const r=await fetch(baseUrl()+TC.ep.logon,{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'user='+encodeURIComponent(cfg.user)+'&password='+encodeURIComponent(pw())});
- if(r.status===401||r.status===403)throw new Error('Login rejected: check credentials');
- if(!r.ok)throw new Error('Login HTTP '+r.status);
- try{const j=await r.clone().json();tok=j.token||j.access_token||null}catch{}   // token if the server returns one, else the session cookie is used
- loggedIn=true;
-}
-function authHdr(){
- if(cfg.auth==='basic')return {Authorization:'Basic '+b64(cfg.user+':'+pw())};
- if(cfg.auth==='bearer')return cfg.token?{Authorization:'Bearer '+cfg.token}:{};
- return tok?{Authorization:'Bearer '+tok}:{};
-}
-async function api(path,opt={},retry=true){
+const b64=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));   // UTF-8 safe btoa(user:password)
+async function api(path,opt={}){
  if(!/^\/(?!\/)/.test(path))throw new Error('Bad path in config');
- if(cfg.auth==='session'&&!loggedIn)await login();
- const r=await fetch(baseUrl()+path,{...opt,credentials:cfg.auth==='session'?'include':'omit',headers:{'Content-Type':'application/json',...authHdr()}});
- if(r.status===401&&cfg.auth==='session'&&retry){loggedIn=false;tok=null;return api(path,opt,false)}
- if(r.status===401||r.status===403)throw new Error('Not authorised (HTTP '+r.status+')');
+ if(!/^https:\/\//i.test(cfg.base))throw new Error('Base URL must start with https://');
+ if(!cfg.user||!pw())throw Object.assign(new Error('Enter username and password in settings'),{auth:true});
+ const r=await fetch(cfg.base.replace(/\/$/,'')+path,{...opt,credentials:'omit',cache:'no-store',headers:{'Content-Type':'application/json',Authorization:'Basic '+b64(cfg.user+':'+pw())}});
+ if(r.status===401||r.status===403)throw Object.assign(new Error('Login rejected (HTTP '+r.status+')'),{auth:true});
+ if(r.status===429)throw new Error('Rate limited by gateway (HTTP 429)');
  if(!r.ok)throw new Error('HTTP '+r.status);
  return r.status===204?null:r.json();
 }
 const live={
  snapshot:async()=>{const e=TC.ep,m=e.am;
+  let j=await api(e.alarms);
   const rows=await Promise.all(TC.tags.map(t=>api(fill(e.read,{id:encodeURIComponent(t.id)}))));
   const tanks=[],pumps=[];
   TC.tags.forEach((t,i)=>{const r=rows[i],n=+getp(r,e.val);
    if(!isFinite(n))throw new Error('Tag '+t.id+': no number at "'+e.val+'"');
    if(t.k==='pump')pumps.push({id:t.id,name:t.name,unit:t.unit,min:t.lo,max:t.hi,sp:n,run:e.run?!!getp(r,e.run):true,mode:e.mode?String(getp(r,e.mode)||'').toUpperCase():'AUTO'});
    else tanks.push({id:t.id,name:t.name,unit:t.unit,lo:t.lo,hi:t.hi,v:n})});
-  let j=await api(e.alarms);if(e.alarmList)j=getp(j,e.alarmList);
+  if(e.alarmList)j=getp(j,e.alarmList);
   const alarms=(Array.isArray(j)?j:[]).map(a=>({id:getp(a,m.id),tag:getp(a,m.tag),text:getp(a,m.text),sev:String(getp(a,m.sev)||'MED').toUpperCase(),time:getp(a,m.time),ack:!!getp(a,m.ack)}));
   return {tanks,alarms,pumps}},
  ack:id=>api(fill(TC.ep.ack,{id:encodeURIComponent(id)}),{method:'POST',body:'{}'}),
@@ -55,7 +42,7 @@ const live={
 function applyCfg(){buildMock();for(const k in hist)delete hist[k];data=null;store.set('gs_last',null);['#tanks','#alarms','#pumps'].forEach(x=>$(x).innerHTML='');start()}
 
 /* ---- State & render ---- */
-let data=store.get('gs_last',null),stale=false,timer;const edits={},hist={};let fails=0;
+let data=store.get('gs_last',null),stale=false,timer;const edits={},hist={};let fails=0,authHalt=false;
 const sc=t=>t.hi*1.15||100;
 const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch{}};
 function track(){const n=Date.now();data.tanks.forEach(t=>{const h=hist[t.id]=(hist[t.id]||[]).filter(p=>n-p.t<9e5);h.push({t:n,v:t.v})})}
@@ -95,11 +82,11 @@ async function refresh(){
   if(cfg.mock){mockTick();data=structuredClone(mock)}else data=await live.snapshot();
   data.ts=Date.now();stale=false;fails=0;track();store.set('gs_last',data);banner(navigator.onLine?'':'Offline: showing last data');
   if(!navigator.onLine)stale=true;
- }catch(e){stale=true;fails++;banner('Cannot reach server ('+e.message+'). Showing cached data.')}
+ }catch(e){stale=true;fails++;if(e.auth)authHalt=true;banner(e.auth?e.message+'. Polling paused: fix credentials in settings.':'Cannot reach server ('+e.message+'). Showing cached data.')}
  render();
 }
 function start(){clearTimeout(timer);loop()}
-async function loop(){await refresh();const b=Math.max(2,cfg.poll)*1000;timer=setTimeout(loop,fails?Math.min(60000,b*2**Math.min(fails,4)):b)}
+async function loop(){await refresh();if(authHalt)return;const b=Math.max(2,cfg.poll)*1000;timer=setTimeout(loop,fails?Math.min(60000,b*2**Math.min(fails,4)):b)}
 
 /* ---- Actions ---- */
 document.addEventListener('click',async e=>{
@@ -116,9 +103,9 @@ document.addEventListener('click',async e=>{
  }catch(err){alert('Command failed: '+err.message)}
 });
 const dlg=$('#dlg');
-$('#cfgBtn').onclick=()=>{$('#mock').checked=cfg.mock;$('#base').value=cfg.base;$('#token').value=cfg.token;$('#poll').value=cfg.poll;$('#day').checked=cfg.day;$('#auth').value=cfg.auth;$('#user').value=cfg.user;$('#pw').value='';dlg.showModal()};
+$('#cfgBtn').onclick=()=>{$('#mock').checked=cfg.mock;$('#base').value=cfg.base;$('#poll').value=cfg.poll;$('#day').checked=cfg.day;$('#user').value=cfg.user;$('#pw').value='';dlg.showModal()};
 $('#cfgForm').addEventListener('submit',e=>{
- if(e.submitter&&e.submitter.value==='ok'){Object.assign(cfg,{mock:$('#mock').checked,base:$('#base').value.trim(),token:$('#token').value,poll:+$('#poll').value||5,day:$('#day').checked,auth:$('#auth').value,user:$('#user').value.trim()});if($('#pw').value){try{sessionStorage.setItem('gs_pw',$('#pw').value)}catch{}}loggedIn=false;tok=null;store.set('gs_cfg',cfg);theme();start()}
+ if(e.submitter&&e.submitter.value==='ok'){Object.assign(cfg,{mock:$('#mock').checked,base:$('#base').value.trim(),poll:+$('#poll').value||5,day:$('#day').checked,user:$('#user').value.trim()});if($('#pw').value){try{sessionStorage.setItem('gs_pw',$('#pw').value)}catch{}}authHalt=false;store.set('gs_cfg',cfg);theme();start()}
 });
 addEventListener('online',refresh);addEventListener('offline',refresh);
 

@@ -1,16 +1,16 @@
 'use strict';
 /* Tag & endpoint configuration. Stored in localStorage (gs_tc). Paths are relative to the server base URL. */
-const DEF={ep:{logon:'/logon',read:'/api/tags/{id}',val:'value',run:'running',mode:'mode',write:'/api/tags/{id}/setpoint',wmethod:'PUT',wbody:'{"value":{v}}',alarms:'/api/alarms?state=active',alarmList:'',ack:'/api/alarms/{id}/ack',am:{id:'id',tag:'tag',text:'text',sev:'sev',time:'time',ack:'ack'}},
+const DEF={ep:{read:'/api/tags/{id}',val:'value',run:'running',mode:'mode',write:'/api/tags/{id}/setpoint',wmethod:'PUT',wbody:'{"value":{v}}',alarms:'/api/alarms?state=active',alarmList:'',ack:'/api/alarms/{id}/ack',am:{id:'id',tag:'tag',text:'text',sev:'sev',time:'time',ack:'ack'}},
  tags:[{k:'tank',id:'R01',name:'Reservoir R1',unit:'%',lo:20,hi:92},{k:'tank',id:'R02',name:'Break Pressure Tank BPT-3',unit:'%',lo:25,hi:90},{k:'tank',id:'R03',name:'Sump WW-12',unit:'%',lo:10,hi:85},{k:'pump',id:'P01',name:'Booster Pump 1',unit:'bar',lo:0,hi:8},{k:'pump',id:'P02',name:'Macerator Pump 2',unit:'Hz',lo:0,hi:50}]};
 const clone=o=>JSON.parse(JSON.stringify(o));
 const norm=j=>({ep:{...DEF.ep,...(j&&j.ep),am:{...DEF.ep.am,...(j&&j.ep&&j.ep.am)}},tags:(Array.isArray(j&&j.tags)?j.tags:[]).map(t=>({...t,lo:+t.lo,hi:+t.hi}))});
 let TC=(()=>{try{const s=JSON.parse(localStorage.getItem('gs_tc'));return s&&s.tags?norm(s):clone(DEF)}catch{return clone(DEF)}})();
 const getp=(o,p)=>p?String(p).split('.').reduce((a,k)=>a==null?a:a[k],o):o;
 const fill=(t,o)=>String(t).replace(/\{(\w+)\}/g,(m,k)=>k in o?o[k]:m);
-const EPF=[['logon','Login URL (session mode, form POST user/password)'],['read','Read URL, one request per tag ({id})'],['val','Value path in response (e.g. data.value)'],['run','Running path (blank = assume running)'],['mode','Mode path HAND/OFF/AUTO (blank = assume AUTO)'],['write','Setpoint write URL ({id})'],['wmethod','Write method (PUT, POST, PATCH)'],['wbody','Write body, JSON ({v} = value)'],['alarms','Active alarms URL'],['alarmList','Alarm list path (blank = response is the list)'],['ack','Acknowledge URL ({id} = alarm id)']];
+const EPF=[['read','Read URL, one request per tag ({id})'],['val','Value path in response (e.g. data.value)'],['run','Running path (blank = assume running)'],['mode','Mode path HAND/OFF/AUTO (blank = assume AUTO)'],['write','Setpoint write URL ({id})'],['wmethod','Write method (PUT, POST, PATCH)'],['wbody','Write body, JSON ({v} = value)'],['alarms','Active alarms URL'],['alarmList','Alarm list path (blank = response is the list)'],['ack','Acknowledge URL ({id} = alarm id)']];
 function check(c){
  const p=/^\/(?!\/)/;
- for(const k of ['logon','read','write','alarms','ack'])if(!p.test(c.ep[k]||''))return k+' URL must start with a single "/" (relative to the server base URL).';
+ for(const k of ['read','write','alarms','ack'])if(!p.test(c.ep[k]||''))return k+' URL must start with a single "/" (relative to the server base URL).';
  if(!['PUT','POST','PATCH'].includes(c.ep.wmethod))return 'Write method must be PUT, POST or PATCH.';
  try{JSON.parse(fill(c.ep.wbody,{id:'x',v:1}))}catch{return 'Write body must be valid JSON once {v} is filled in.'}
  const seen=new Set();
