@@ -2,7 +2,7 @@
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
-const cfg=Object.assign({mock:true,base:'',token:'',poll:5,day:false},store.get('gs_cfg',{}));
+const cfg=Object.assign({mock:true,base:'',token:'',poll:5,day:false,auth:'session',user:''},store.get('gs_cfg',{}));
 
 /* ---- Mock data (same shape the adapter returns) ---- */
 const mock={tanks:[],pumps:[],alarms:[{id:'A1001',tag:'WW-12.LevelHigh',text:'Wet well high level',sev:'HIGH',time:new Date(Date.now()-420000).toISOString(),ack:false},{id:'A1002',tag:'PRV-07.PressLow',text:'PRV-07 outlet pressure low',sev:'MED',time:new Date(Date.now()-3600000).toISOString(),ack:false}]};
@@ -11,9 +11,30 @@ buildMock();
 function mockTick(){mock.tanks.forEach(t=>{t.v=Math.min(t.hi*1.1,Math.max(0,+(t.v+(Math.random()-.5)*(t.hi-t.lo)/60).toFixed(1)))})}
 
 /* ---- Adapter: edit paths here to match your GeoSCADA REST gateway ---- */
-async function api(path,opt={}){
+/* ---- Authentication: session login (POST form to logon URL), HTTP Basic, or static Bearer ---- */
+let tok=null,loggedIn=false;
+const pw=()=>{try{return sessionStorage.getItem('gs_pw')||''}catch{return ''}};
+const b64=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+const baseUrl=()=>cfg.base.replace(/\/$/,'');
+async function login(){
+ if(!cfg.user||!pw())throw new Error('Enter username and password in settings');
+ const r=await fetch(baseUrl()+TC.ep.logon,{method:'POST',credentials:'include',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'user='+encodeURIComponent(cfg.user)+'&password='+encodeURIComponent(pw())});
+ if(r.status===401||r.status===403)throw new Error('Login rejected: check credentials');
+ if(!r.ok)throw new Error('Login HTTP '+r.status);
+ try{const j=await r.clone().json();tok=j.token||j.access_token||null}catch{}   // token if the server returns one, else the session cookie is used
+ loggedIn=true;
+}
+function authHdr(){
+ if(cfg.auth==='basic')return {Authorization:'Basic '+b64(cfg.user+':'+pw())};
+ if(cfg.auth==='bearer')return cfg.token?{Authorization:'Bearer '+cfg.token}:{};
+ return tok?{Authorization:'Bearer '+tok}:{};
+}
+async function api(path,opt={},retry=true){
  if(!/^\/(?!\/)/.test(path))throw new Error('Bad path in config');
- const r=await fetch(cfg.base.replace(/\/$/,'')+path,{...opt,headers:{'Content-Type':'application/json',...(cfg.token?{Authorization:'Bearer '+cfg.token}:{})}});
+ if(cfg.auth==='session'&&!loggedIn)await login();
+ const r=await fetch(baseUrl()+path,{...opt,credentials:cfg.auth==='session'?'include':'omit',headers:{'Content-Type':'application/json',...authHdr()}});
+ if(r.status===401&&cfg.auth==='session'&&retry){loggedIn=false;tok=null;return api(path,opt,false)}
+ if(r.status===401||r.status===403)throw new Error('Not authorised (HTTP '+r.status+')');
  if(!r.ok)throw new Error('HTTP '+r.status);
  return r.status===204?null:r.json();
 }
@@ -95,9 +116,9 @@ document.addEventListener('click',async e=>{
  }catch(err){alert('Command failed: '+err.message)}
 });
 const dlg=$('#dlg');
-$('#cfgBtn').onclick=()=>{$('#mock').checked=cfg.mock;$('#base').value=cfg.base;$('#token').value=cfg.token;$('#poll').value=cfg.poll;$('#day').checked=cfg.day;dlg.showModal()};
+$('#cfgBtn').onclick=()=>{$('#mock').checked=cfg.mock;$('#base').value=cfg.base;$('#token').value=cfg.token;$('#poll').value=cfg.poll;$('#day').checked=cfg.day;$('#auth').value=cfg.auth;$('#user').value=cfg.user;$('#pw').value='';dlg.showModal()};
 $('#cfgForm').addEventListener('submit',e=>{
- if(e.submitter&&e.submitter.value==='ok'){Object.assign(cfg,{mock:$('#mock').checked,base:$('#base').value.trim(),token:$('#token').value,poll:+$('#poll').value||5,day:$('#day').checked});store.set('gs_cfg',cfg);theme();start()}
+ if(e.submitter&&e.submitter.value==='ok'){Object.assign(cfg,{mock:$('#mock').checked,base:$('#base').value.trim(),token:$('#token').value,poll:+$('#poll').value||5,day:$('#day').checked,auth:$('#auth').value,user:$('#user').value.trim()});if($('#pw').value){try{sessionStorage.setItem('gs_pw',$('#pw').value)}catch{}}loggedIn=false;tok=null;store.set('gs_cfg',cfg);theme();start()}
 });
 addEventListener('online',refresh);addEventListener('offline',refresh);
 

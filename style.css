@@ -22,6 +22,7 @@ main{padding:0 1rem 2rem;max-width:900px;margin:auto}
 .bar.warn i{background:var(--amb)}.bar.alarm i{background:var(--red)}
 .tick{position:absolute;top:0;bottom:0;width:3px;background:var(--tx);opacity:.8}.spark{width:100%;height:28px;margin-top:.4rem;color:var(--blu)}
 input:disabled,.btn:disabled{opacity:.45;cursor:not-allowed}
+select{width:100%;min-height:52px;font:inherit;background:var(--bg);color:var(--tx);border:2px solid var(--line);border-radius:8px}
 dialog{max-height:90vh;overflow:auto}
 #cdlg input,#cdlg textarea{width:100%;min-height:48px;font:inherit;padding:.3rem .7rem;background:var(--bg);color:var(--tx);border:2px solid var(--line);border-radius:8px}
 #cdlg textarea{font:.8rem monospace}.trow{margin-bottom:.6rem}

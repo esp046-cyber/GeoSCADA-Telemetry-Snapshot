@@ -48,7 +48,10 @@
   <label class="chk"><input type="checkbox" id="mock"> Demo mode (mock data)</label>
   <label class="chk"><input type="checkbox" id="day"> Daylight mode (high contrast)</label>
   <label>Server base URL<input id="base" type="url" placeholder="https://scada.example.org:5481"></label>
-  <label>API token<input id="token" type="password" autocomplete="off"></label>
+  <label>Authentication<select id="auth"><option value="session">Session login (POST to login URL)</option><option value="basic">HTTP Basic</option><option value="bearer">Static bearer token</option></select></label>
+  <label>Username<input id="user" autocomplete="username"></label>
+  <label>Password (kept for this session only)<input id="pw" type="password" autocomplete="current-password"></label>
+  <label>Bearer token (bearer mode only)<input id="token" type="password" autocomplete="off"></label>
   <label>Refresh (seconds)<input id="poll" type="number" min="2" max="300"></label>
   <button type="button" id="tagBtn" class="btn wide">Configure tags &amp; endpoints</button>
   <div class="row"><button value="cancel" class="btn ghost">Cancel</button><button id="save" value="ok" class="btn primary">Save</button></div>
