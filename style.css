@@ -12,6 +12,9 @@ main{padding:0 1rem 2rem;max-width:900px;margin:auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.8rem}
 .card{background:var(--card);border:2px solid var(--line);border-radius:10px;padding:.9rem}
 .card.alarm{border-color:var(--red)}
+.alm{border-color:var(--amb)}.alm.s-HIGH{border-color:var(--red)}.alm .sev{color:var(--amb)}.alm.s-HIGH .sev{color:var(--red)}.alm.ackd{opacity:.65}
+.mode{font-size:.8rem;border:2px solid var(--mu);border-radius:6px;padding:0 .4rem;color:var(--mu)}
+.btn.arm{background:var(--red);border-color:var(--red);color:#fff}
 .card h3{margin:0 0 .4rem;font-size:1rem}
 .val{font-size:2.2rem;font-weight:800}.val small{font-size:1rem;color:var(--mu)}
 .bar{height:22px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:.4rem}
@@ -34,4 +37,4 @@ input[type=url],input[type=password],input[type=number],.sp input{width:100%;min
 dialog{background:var(--bg);color:var(--tx);border:2px solid var(--amb);border-radius:12px;width:min(92vw,440px)}
 dialog::backdrop{background:#000a}
 .run{color:var(--grn);font-weight:800}.stop{color:var(--mu);font-weight:800}
-@media(prefers-reduced-motion:no-preference){.dot.ok{animation:p 1.6s infinite}@keyframes p{50%{opacity:.3}}.bar i{transition:width .6s}}
+@media(prefers-reduced-motion:no-preference){.btn.arm{animation:p .8s infinite}.dot.ok{animation:p 1.6s infinite}@keyframes p{50%{opacity:.3}}.bar i{transition:width .6s}}
