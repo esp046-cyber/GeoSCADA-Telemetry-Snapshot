@@ -32,7 +32,7 @@
 <body>
 <header class="top">
  <div><h1>GeoSCADA Snapshot</h1><p id="meta" class="muted">Starting…</p></div>
- <div class="row"><span id="badge" class="badge">MOCK</span><button id="cfgBtn" class="btn ghost" aria-label="Settings">⚙</button></div>
+ <div class="row"><span id="dot" class="dot mock" role="img" aria-label="Comms status"></span><span id="badge" class="badge">MOCK</span><button id="cfgBtn" class="btn ghost" aria-label="Settings">⚙</button></div>
 </header>
 <div id="banner" class="banner" hidden></div>
 <main>
@@ -46,6 +46,7 @@
  <form method="dialog" id="cfgForm">
   <h2>Connection</h2>
   <label class="chk"><input type="checkbox" id="mock"> Demo mode (mock data)</label>
+  <label class="chk"><input type="checkbox" id="day"> Daylight mode (high contrast)</label>
   <label>Server base URL<input id="base" type="url" placeholder="https://scada.example.org:5481"></label>
   <label>API token<input id="token" type="password" autocomplete="off"></label>
   <label>Refresh (seconds)<input id="poll" type="number" min="2" max="300"></label>

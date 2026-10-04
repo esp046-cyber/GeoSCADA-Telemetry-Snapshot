@@ -2,7 +2,7 @@
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
-const cfg=Object.assign({mock:true,base:'',token:'',poll:5},store.get('gs_cfg',{}));
+const cfg=Object.assign({mock:true,base:'',token:'',poll:5,day:false},store.get('gs_cfg',{}));
 
 /* ---- Mock data (same shape the adapter returns) ---- */
 const mock={
@@ -28,10 +28,11 @@ const live={
 let data=store.get('gs_last',null),stale=false,timer;
 function render(){
  if(!data)return;
- $('#tanks').innerHTML=data.tanks.map(t=>{const w=t.v<=t.lo||t.v>=t.hi;return `<div class="card ${w?'alarm':''}"><h3>${esc(t.name)}</h3><div class="val">${t.v}<small> ${esc(t.unit)}</small></div><div class="bar ${w?'warn':''}" role="progressbar" aria-valuenow="${t.v}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100,t.v)}%"></i></div><p class="muted">Limits ${t.lo}–${t.hi} ${esc(t.unit)}</p></div>`}).join('');
+ $('#tanks').innerHTML=data.tanks.map(t=>{const st=(t.v<=t.lo||t.v>=t.hi)?'alarm':(t.v<=t.lo+5||t.v>=t.hi-5)?'warn':'';return `<div class="card ${st==='alarm'?'alarm':''}"><h3>${esc(t.name)}</h3><div class="val">${t.v}<small> ${esc(t.unit)}</small></div><div class="bar ${st}" role="progressbar" aria-valuenow="${t.v}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100,t.v)}%"></i></div><p class="muted">Limits ${t.lo}–${t.hi} ${esc(t.unit)}${st?' · <b>'+(st==='alarm'?'LIMIT BREACH':'NEAR LIMIT')+'</b>':''}</p></div>`}).join('');
  $('#alarms').innerHTML=data.alarms.length?data.alarms.map(a=>`<div class="card alarm alm"><div><span class="sev">${esc(a.sev)}</span> ${esc(a.text)}<p class="muted">${esc(a.tag)} · ${new Date(a.time).toLocaleTimeString()}${a.ack?' · acknowledged':''}</p></div>${a.ack?'':`<button class="btn primary" data-ack="${esc(a.id)}">Ack</button>`}</div>`).join(''):'<p class="muted">No active alarms.</p>';
  $('#pumps').innerHTML=data.pumps.map(p=>`<div class="card"><h3>${esc(p.name)} <span class="${p.run?'run':'stop'}">${p.run?'RUNNING':'STOPPED'}</span></h3><div class="val">${p.sp}<small> ${esc(p.unit)}</small></div><div class="sp"><input type="number" inputmode="decimal" step="any" min="${p.min}" max="${p.max}" value="${p.sp}" aria-label="New setpoint for ${esc(p.name)}" id="sp-${esc(p.id)}"><button class="btn primary" data-sp="${esc(p.id)}">Set</button></div><p class="muted">Range ${p.min}–${p.max} ${esc(p.unit)}</p></div>`).join('');
  const b=$('#badge');b.textContent=cfg.mock?'MOCK':stale?'STALE':'LIVE';b.className='badge '+(cfg.mock?'':stale?'stale':'live');
+ $('#dot').className='dot '+(cfg.mock?'mock':stale?'fail':'ok');$('#dot').title=cfg.mock?'Demo data':stale?'Comms failure':'Live';
  $('#meta').textContent=(stale?'Cached ':'Updated ')+new Date(data.ts||Date.now()).toLocaleTimeString()+(cfg.mock?' · demo data':'');
 }
 function banner(t){const b=$('#banner');b.hidden=!t;b.textContent=t||''}
@@ -61,9 +62,9 @@ document.addEventListener('click',async e=>{
  }catch(err){alert('Command failed: '+err.message)}
 });
 const dlg=$('#dlg');
-$('#cfgBtn').onclick=()=>{$('#mock').checked=cfg.mock;$('#base').value=cfg.base;$('#token').value=cfg.token;$('#poll').value=cfg.poll;dlg.showModal()};
+$('#cfgBtn').onclick=()=>{$('#mock').checked=cfg.mock;$('#base').value=cfg.base;$('#token').value=cfg.token;$('#poll').value=cfg.poll;$('#day').checked=cfg.day;dlg.showModal()};
 $('#cfgForm').addEventListener('submit',e=>{
- if(e.submitter&&e.submitter.value==='ok'){Object.assign(cfg,{mock:$('#mock').checked,base:$('#base').value.trim(),token:$('#token').value,poll:+$('#poll').value||5});store.set('gs_cfg',cfg);start()}
+ if(e.submitter&&e.submitter.value==='ok'){Object.assign(cfg,{mock:$('#mock').checked,base:$('#base').value.trim(),token:$('#token').value,poll:+$('#poll').value||5,day:$('#day').checked});store.set('gs_cfg',cfg);theme();start()}
 });
 addEventListener('online',refresh);addEventListener('offline',refresh);
 
@@ -73,4 +74,5 @@ addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;$('#install')
 $('#install').onclick=async()=>{if(dp){dp.prompt();await dp.userChoice;dp=null;$('#install').hidden=true}};
 if(/iphone|ipad|ipod/i.test(navigator.userAgent)&&!navigator.standalone)$('#ios').hidden=false;
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-render();start();
+function theme(){document.documentElement.dataset.theme=cfg.day?'day':'dark'}
+theme();render();start();
