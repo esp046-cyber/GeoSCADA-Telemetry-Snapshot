@@ -62,9 +62,22 @@
  <div class="row"><button type="button" class="btn" id="addTank">+ Tank</button><button type="button" class="btn" id="addPump">+ Pump</button></div>
  <label>Config JSON (export here, paste to share between devices)<textarea id="cjson" rows="6"></textarea></label>
  <div class="row"><button type="button" class="btn" id="cexp">Export</button><button type="button" class="btn" id="cimp">Import</button><button type="button" class="btn" id="creset">Reset</button></div>
+ <div class="row"><button type="button" class="btn" id="cqr">Show QR</button><button type="button" class="btn" id="cscan">Scan QR</button></div>
+ <div id="qrbox" hidden></div>
  <p id="cerr" class="muted" role="alert"></p>
  <div class="row"><button type="button" class="btn ghost" id="ccancel">Cancel</button><button type="button" class="btn primary" id="csave">Save</button></div>
 </dialog>
+<dialog id="wdlg">
+ <h2>Confirm setpoint change</h2>
+ <p id="wtxt"></p><p class="muted">This writes to the live system.</p>
+ <div class="row"><button type="button" class="btn ghost" id="wno" autofocus>Cancel</button><button type="button" class="btn primary" id="wyes" disabled>Confirm</button></div>
+</dialog>
+<dialog id="sdlg">
+ <h2>Scan config QR</h2><video id="svid" playsinline muted></video>
+ <p id="serr" class="muted" role="alert"></p><button type="button" class="btn wide" id="sstop">Cancel</button>
+</dialog>
+<script src="qrcode.js"></script>
+<script src="jsqr.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
 </body>

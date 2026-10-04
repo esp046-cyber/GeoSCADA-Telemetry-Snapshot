@@ -1,4 +1,4 @@
-const V='geosnap-v5',SHELL=['./','index.html','style.css','app.js','config.js','manifest.json'];
+const V='geosnap-v6',SHELL=['./','index.html','style.css','app.js','config.js','qrcode.js','jsqr.js','manifest.json'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{

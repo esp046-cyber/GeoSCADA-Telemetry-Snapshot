@@ -34,26 +34,41 @@ const live={
 function applyCfg(){buildMock();for(const k in hist)delete hist[k];data=null;store.set('gs_last',null);['#tanks','#alarms','#pumps'].forEach(x=>$(x).innerHTML='');start()}
 
 /* ---- State & render ---- */
-let data=store.get('gs_last',null),stale=false,timer,armed=null,armT;const edits={},hist={};let fails=0;
+let data=store.get('gs_last',null),stale=false,timer;const edits={},hist={};let fails=0;
 const sc=t=>t.hi*1.15||100;
 const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch{}};
 function track(){const n=Date.now();data.tanks.forEach(t=>{const h=hist[t.id]=(hist[t.id]||[]).filter(p=>n-p.t<9e5);h.push({t:n,v:t.v})})}
 function spark(id){const h=hist[id];if(!h||h.length<2)return'';const n=Date.now(),vs=h.map(p=>p.v),lo=Math.min(...vs),sp=(Math.max(...vs)-lo)||1;return `<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="15 minute trend"><polyline fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" points="${h.map(p=>((p.t-(n-9e5))/9e5*100).toFixed(1)+','+(22-(p.v-lo)/sp*20).toFixed(1)).join(' ')}"/></svg><p class="muted">15 min trend (auto-scaled)</p>`}
-const busy=()=>armed||(document.activeElement&&document.activeElement.closest&&document.activeElement.closest('#pumps'));
+const busy=()=>(document.activeElement&&document.activeElement.closest&&document.activeElement.closest('#pumps'));
 function renderPumps(){
- $('#pumps').innerHTML=data.pumps.map(p=>`<div class="card"><h3>${esc(p.name)} <span class="${p.run?'run':'stop'}">${p.run?'RUNNING':'STOPPED'}</span> <span class="mode">${esc(p.mode||'—')}</span></h3><div class="val">${p.sp}<small> ${esc(p.unit)}</small></div><div class="sp"><input type="number" inputmode="decimal" step="any" min="${p.min}" max="${p.max}" value="${edits['sp-'+p.id]??p.sp}" aria-label="New setpoint for ${esc(p.name)}" id="sp-${esc(p.id)}"${p.mode==='AUTO'?'':' disabled'}><button class="btn primary${armed===p.id?' arm':''}" data-sp="${esc(p.id)}"${p.mode==='AUTO'?'':' disabled'}>${armed===p.id?'Confirm?':'Set'}</button></div><p class="muted">Range ${p.min}–${p.max} ${esc(p.unit)}${p.mode==='AUTO'?'':' · <b>Locked: AUTO required</b>'}</p></div>`).join('');
+ $('#pumps').innerHTML=data.pumps.map(p=>`<div class="card"><h3>${esc(p.name)} <span class="${p.run?'run':'stop'}">${p.run?'RUNNING':'STOPPED'}</span> <span class="mode">${esc(p.mode||'—')}</span></h3><div class="val">${p.sp}<small> ${esc(p.unit)}</small></div><div class="sp"><input type="number" inputmode="decimal" step="any" min="${p.min}" max="${p.max}" value="${edits['sp-'+p.id]??p.sp}" aria-label="New setpoint for ${esc(p.name)}" id="sp-${esc(p.id)}"${p.mode==='AUTO'?'':' disabled'}><button class="btn primary" data-sp="${esc(p.id)}"${p.mode==='AUTO'?'':' disabled'}>Set</button></div><p class="muted">Range ${p.min}–${p.max} ${esc(p.unit)}${p.mode==='AUTO'?'':' · <b>Locked: AUTO required</b>'}</p></div>`).join('');
 }
-document.addEventListener('input',e=>{if(e.target.id&&e.target.id.startsWith('sp-')){edits[e.target.id]=e.target.value;if(armed){armed=null;document.querySelectorAll('.arm').forEach(b=>{b.textContent='Set';b.classList.remove('arm')})}}});
+document.addEventListener('input',e=>{if(e.target.id&&e.target.id.startsWith('sp-')){edits[e.target.id]=e.target.value;}});
 function render(){
  if(!data)return;
  $('#tanks').innerHTML=data.tanks.map(t=>{const m=(t.hi-t.lo)*.07,st=(t.v<=t.lo||t.v>=t.hi)?'alarm':(t.v<=t.lo+m||t.v>=t.hi-m)?'warn':'';return `<div class="card ${st==='alarm'?'alarm':''}"><h3>${esc(t.name)}</h3><div class="val">${t.v}<small> ${esc(t.unit)}</small></div><div class="bar ${st}" role="progressbar" aria-valuenow="${t.v}" aria-valuemin="0" aria-valuemax="${Math.round(sc(t))}"><i style="width:${Math.min(100,t.v/sc(t)*100)}%"></i><b class="tick" style="left:${t.lo/sc(t)*100}%"></b><b class="tick" style="left:${t.hi/sc(t)*100}%"></b></div>${spark(t.id)}<p class="muted">Limits ${t.lo}–${t.hi} ${esc(t.unit)}${st?' · <b>'+(st==='alarm'?'LIMIT BREACH':'NEAR LIMIT')+'</b>':''}</p></div>`}).join('');
  $('#alarms').innerHTML=data.alarms.length?data.alarms.map(a=>`<div class="card alm s-${esc(a.sev)}${a.ack?' ackd':''}"><div><span class="sev">${esc(a.sev)}</span> ${esc(a.text)}<p class="muted">${esc(a.tag)} · ${new Date(a.time).toLocaleTimeString()}${a.ack?' · acknowledged':''}</p></div>${a.ack?'':`<button class="btn primary" data-ack="${esc(a.id)}">Ack</button>`}</div>`).join(''):'<p class="muted">No active alarms.</p>';
  if(!busy())renderPumps();
  const b=$('#badge');b.textContent=cfg.mock?'MOCK':stale?'STALE':'LIVE';b.className='badge '+(cfg.mock?'':stale?'stale':'live');
- $('#dot').className='dot '+(cfg.mock?'mock':stale?'fail':'ok');$('#dot').title=cfg.mock?'Demo data':stale?'Comms failure':'Live';
+ document.body.classList.toggle('stale',stale&&!cfg.mock);$('#dot').className='dot '+(cfg.mock?'mock':stale?'fail':'ok');$('#dot').title=cfg.mock?'Demo data':stale?'Comms failure':'Live';
  $('#meta').textContent=(stale?'Cached ':'Updated ')+new Date(data.ts||Date.now()).toLocaleTimeString()+(cfg.mock?' · demo data':'');
 }
-function banner(t){const b=$('#banner');b.hidden=!t;b.textContent=t||''}
+function banner(t){const b=$('#banner');b.hidden=!t;b.textContent=t?'COMMS FAULT · '+t:''}
+/* Two-stage write: Set opens a modal; only Confirm dispatches the request. */
+let pend=null;
+function openConfirm(p,v){
+ pend={id:p.id,v};const y=$('#wyes');y.disabled=true;y.textContent='Confirm';
+ $('#wtxt').innerHTML='<b>'+esc(p.name)+'</b> ('+esc(p.mode)+')<br>'+p.sp+' → <b>'+v+'</b> '+esc(p.unit);
+ $('#wdlg').showModal();setTimeout(()=>{y.disabled=false},800);
+}
+$('#wdlg').addEventListener('close',()=>{pend=null});
+$('#wno').onclick=()=>$('#wdlg').close();
+$('#wyes').onclick=async()=>{
+ if(!pend)return;const w=pend;pend=null;const y=$('#wyes');y.disabled=true;y.textContent='Sending…';
+ if(!navigator.onLine||(stale&&!cfg.mock)){$('#wdlg').close();alert('Comms fault: setpoint not sent.');return}
+ try{if(cfg.mock)mock.pumps.find(x=>x.id===w.id).sp=w.v;else await live.setpoint(w.id,w.v);delete edits['sp-'+w.id];buzz([60,40,60]);$('#wdlg').close();refresh()}
+ catch(err){$('#wdlg').close();alert('Command failed: '+err.message)}
+};
 async function refresh(){
  try{
   if(cfg.mock){mockTick();data=structuredClone(mock)}else data=await live.snapshot();
@@ -75,11 +90,7 @@ document.addEventListener('click',async e=>{
    if(p.mode!=='AUTO'){alert('Setpoint locked: pump must be in AUTO.');return}
    if(!isFinite(v)||v<p.min||v>p.max){alert('Value must be between '+p.min+' and '+p.max+' '+p.unit);return}
    if(!navigator.onLine||stale&&!cfg.mock){alert('Offline: setpoint not sent.');return}
-   if(armed!==s){armed=s;clearTimeout(armT);armT=setTimeout(()=>{armed=null;renderPumps()},6000);renderPumps();return}
-   clearTimeout(armT);armed=null;if(document.activeElement)document.activeElement.blur();
-   if(cfg.mock)mock.pumps.find(x=>x.id===s).sp=v;else await live.setpoint(s,v);
-   delete edits['sp-'+s];buzz([60,40,60]);
-   refresh();
+   openConfirm(p,v);
   }
  }catch(err){alert('Command failed: '+err.message)}
 });

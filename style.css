@@ -1,5 +1,5 @@
-:root{--bg:#0b1220;--card:#14213a;--line:#2b3d63;--tx:#f2f6ff;--mu:#9fb0d0;--amb:#ffb300;--blu:#2aa3ff;--red:#ff4d4d;--grn:#35d07f}
-:root[data-theme=day]{--bg:#fff;--card:#f0f0f0;--line:#222;--tx:#000;--mu:#2a2a2a;--amb:#b36b00;--blu:#0057b8;--red:#c00000;--grn:#007a33}
+:root{--bg:#0b1220;--card:#14213a;--line:#2b3d63;--tx:#f2f6ff;--mu:#9fb0d0;--amb:#ffb300;--blu:#2aa3ff;--red:#ff4d4d;--grn:#35d07f;--sys:#e040fb}
+:root[data-theme=day]{--bg:#fff;--card:#f0f0f0;--line:#222;--tx:#000;--mu:#2a2a2a;--amb:#b36b00;--blu:#0057b8;--red:#c00000;--grn:#007a33;--sys:#8e0075}
 :root[data-theme=day] .btn.primary,:root[data-theme=day] .badge{color:#fff}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--tx);font:17px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -25,14 +25,16 @@ input:disabled,.btn:disabled{opacity:.45;cursor:not-allowed}
 dialog{max-height:90vh;overflow:auto}
 #cdlg input,#cdlg textarea{width:100%;min-height:48px;font:inherit;padding:.3rem .7rem;background:var(--bg);color:var(--tx);border:2px solid var(--line);border-radius:8px}
 #cdlg textarea{font:.8rem monospace}.trow{margin-bottom:.6rem}
-.dot{width:18px;height:18px;border-radius:50%;background:var(--grn);border:2px solid var(--tx)}.dot.mock{background:var(--amb)}.dot.fail{background:var(--red)}
+.dot{width:18px;height:18px;border-radius:50%;background:var(--grn);border:2px solid var(--tx)}.dot.mock{background:var(--amb)}.dot.fail{background:var(--sys)}
 .btn{min-height:56px;min-width:56px;padding:0 1.1rem;font:inherit;font-weight:700;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--tx);cursor:pointer}
 .btn.primary{background:var(--amb);color:#111;border-color:var(--amb)}
 .btn.ghost{background:transparent}.btn.wide{width:100%;margin-top:1.4rem}
 .btn:focus-visible,input:focus-visible{outline:3px solid var(--blu);outline-offset:2px}
 .badge{padding:.35rem .6rem;border-radius:6px;font-weight:800;font-size:.8rem;background:var(--amb);color:#111}
-.badge.live{background:var(--grn)}.badge.stale{background:var(--red);color:#fff}
-.banner{background:var(--red);padding:.6rem 1rem;font-weight:700}
+.badge.live{background:var(--grn)}.badge.stale{background:var(--sys);color:#fff}
+.banner{background:repeating-linear-gradient(135deg,var(--sys) 0 12px,#3a0050 12px 24px);color:#fff;text-shadow:0 1px 3px #000;padding:.6rem 1rem;font-weight:800;border-block:2px solid var(--sys)}
+body.stale .val{opacity:.5}
+#qrbox{background:#fff;padding:8px;border-radius:8px;margin:.6rem 0}#svid{width:100%;border-radius:8px;background:#000}
 .alm{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-bottom:.6rem}
 .sev{font-weight:800;color:var(--red)}
 label{display:block;margin:.7rem 0;color:var(--mu)}
