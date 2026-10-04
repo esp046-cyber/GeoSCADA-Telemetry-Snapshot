@@ -25,15 +25,18 @@ const live={
 };
 
 /* ---- State & render ---- */
-let data=store.get('gs_last',null),stale=false,timer,armed=null,armT;const edits={};
+let data=store.get('gs_last',null),stale=false,timer,armed=null,armT;const edits={},hist={};let fails=0;
+const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch{}};
+function track(){const n=Date.now();data.tanks.forEach(t=>{const h=hist[t.id]=(hist[t.id]||[]).filter(p=>n-p.t<9e5);h.push({t:n,v:t.v})})}
+function spark(id){const h=hist[id];if(!h||h.length<2)return'';const n=Date.now();return `<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="15 minute trend"><polyline fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" points="${h.map(p=>((p.t-(n-9e5))/9e5*100).toFixed(1)+','+(24-Math.min(100,Math.max(0,p.v))*.24).toFixed(1)).join(' ')}"/></svg><p class="muted">15 min trend</p>`}
 const busy=()=>armed||(document.activeElement&&document.activeElement.closest&&document.activeElement.closest('#pumps'));
 function renderPumps(){
- $('#pumps').innerHTML=data.pumps.map(p=>`<div class="card"><h3>${esc(p.name)} <span class="${p.run?'run':'stop'}">${p.run?'RUNNING':'STOPPED'}</span> <span class="mode">${esc(p.mode||'—')}</span></h3><div class="val">${p.sp}<small> ${esc(p.unit)}</small></div><div class="sp"><input type="number" inputmode="decimal" step="any" min="${p.min}" max="${p.max}" value="${edits['sp-'+p.id]??p.sp}" aria-label="New setpoint for ${esc(p.name)}" id="sp-${esc(p.id)}"><button class="btn primary${armed===p.id?' arm':''}" data-sp="${esc(p.id)}">${armed===p.id?'Confirm?':'Set'}</button></div><p class="muted">Range ${p.min}–${p.max} ${esc(p.unit)}</p></div>`).join('');
+ $('#pumps').innerHTML=data.pumps.map(p=>`<div class="card"><h3>${esc(p.name)} <span class="${p.run?'run':'stop'}">${p.run?'RUNNING':'STOPPED'}</span> <span class="mode">${esc(p.mode||'—')}</span></h3><div class="val">${p.sp}<small> ${esc(p.unit)}</small></div><div class="sp"><input type="number" inputmode="decimal" step="any" min="${p.min}" max="${p.max}" value="${edits['sp-'+p.id]??p.sp}" aria-label="New setpoint for ${esc(p.name)}" id="sp-${esc(p.id)}"${p.mode==='AUTO'?'':' disabled'}><button class="btn primary${armed===p.id?' arm':''}" data-sp="${esc(p.id)}"${p.mode==='AUTO'?'':' disabled'}>${armed===p.id?'Confirm?':'Set'}</button></div><p class="muted">Range ${p.min}–${p.max} ${esc(p.unit)}${p.mode==='AUTO'?'':' · <b>Locked: AUTO required</b>'}</p></div>`).join('');
 }
 document.addEventListener('input',e=>{if(e.target.id&&e.target.id.startsWith('sp-')){edits[e.target.id]=e.target.value;if(armed){armed=null;document.querySelectorAll('.arm').forEach(b=>{b.textContent='Set';b.classList.remove('arm')})}}});
 function render(){
  if(!data)return;
- $('#tanks').innerHTML=data.tanks.map(t=>{const st=(t.v<=t.lo||t.v>=t.hi)?'alarm':(t.v<=t.lo+5||t.v>=t.hi-5)?'warn':'';return `<div class="card ${st==='alarm'?'alarm':''}"><h3>${esc(t.name)}</h3><div class="val">${t.v}<small> ${esc(t.unit)}</small></div><div class="bar ${st}" role="progressbar" aria-valuenow="${t.v}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100,t.v)}%"></i></div><p class="muted">Limits ${t.lo}–${t.hi} ${esc(t.unit)}${st?' · <b>'+(st==='alarm'?'LIMIT BREACH':'NEAR LIMIT')+'</b>':''}</p></div>`}).join('');
+ $('#tanks').innerHTML=data.tanks.map(t=>{const st=(t.v<=t.lo||t.v>=t.hi)?'alarm':(t.v<=t.lo+5||t.v>=t.hi-5)?'warn':'';return `<div class="card ${st==='alarm'?'alarm':''}"><h3>${esc(t.name)}</h3><div class="val">${t.v}<small> ${esc(t.unit)}</small></div><div class="bar ${st}" role="progressbar" aria-valuenow="${t.v}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100,t.v)}%"></i><b class="tick" style="left:${t.lo}%"></b><b class="tick" style="left:${t.hi}%"></b></div>${spark(t.id)}<p class="muted">Limits ${t.lo}–${t.hi} ${esc(t.unit)}${st?' · <b>'+(st==='alarm'?'LIMIT BREACH':'NEAR LIMIT')+'</b>':''}</p></div>`}).join('');
  $('#alarms').innerHTML=data.alarms.length?data.alarms.map(a=>`<div class="card alm s-${esc(a.sev)}${a.ack?' ackd':''}"><div><span class="sev">${esc(a.sev)}</span> ${esc(a.text)}<p class="muted">${esc(a.tag)} · ${new Date(a.time).toLocaleTimeString()}${a.ack?' · acknowledged':''}</p></div>${a.ack?'':`<button class="btn primary" data-ack="${esc(a.id)}">Ack</button>`}</div>`).join(''):'<p class="muted">No active alarms.</p>';
  if(!busy())renderPumps();
  const b=$('#badge');b.textContent=cfg.mock?'MOCK':stale?'STALE':'LIVE';b.className='badge '+(cfg.mock?'':stale?'stale':'live');
@@ -44,26 +47,28 @@ function banner(t){const b=$('#banner');b.hidden=!t;b.textContent=t||''}
 async function refresh(){
  try{
   if(cfg.mock){mockTick();data=structuredClone(mock)}else data=await live.snapshot();
-  data.ts=Date.now();stale=false;store.set('gs_last',data);banner(navigator.onLine?'':'Offline: showing last data');
+  data.ts=Date.now();stale=false;fails=0;track();store.set('gs_last',data);banner(navigator.onLine?'':'Offline: showing last data');
   if(!navigator.onLine)stale=true;
- }catch(e){stale=true;banner('Cannot reach server ('+e.message+'). Showing cached data.')}
+ }catch(e){stale=true;fails++;banner('Cannot reach server ('+e.message+'). Showing cached data.')}
  render();
 }
-function start(){clearInterval(timer);refresh();timer=setInterval(refresh,Math.max(2,cfg.poll)*1000)}
+function start(){clearTimeout(timer);loop()}
+async function loop(){await refresh();const b=Math.max(2,cfg.poll)*1000;timer=setTimeout(loop,fails?Math.min(60000,b*2**Math.min(fails,4)):b)}
 
 /* ---- Actions ---- */
 document.addEventListener('click',async e=>{
  const a=e.target.dataset.ack,s=e.target.dataset.sp;
  try{
-  if(a){if(cfg.mock){mock.alarms.find(x=>x.id===a).ack=true}else await live.ack(a);refresh()}
+  if(a){if(cfg.mock){mock.alarms.find(x=>x.id===a).ack=true}else await live.ack(a);buzz(40);refresh()}
   if(s){
    const p=data.pumps.find(x=>x.id===s),v=parseFloat($('#sp-'+s).value);
+   if(p.mode!=='AUTO'){alert('Setpoint locked: pump must be in AUTO.');return}
    if(!isFinite(v)||v<p.min||v>p.max){alert('Value must be between '+p.min+' and '+p.max+' '+p.unit);return}
    if(!navigator.onLine||stale&&!cfg.mock){alert('Offline: setpoint not sent.');return}
    if(armed!==s){armed=s;clearTimeout(armT);armT=setTimeout(()=>{armed=null;renderPumps()},6000);renderPumps();return}
    clearTimeout(armT);armed=null;if(document.activeElement)document.activeElement.blur();
    if(cfg.mock)mock.pumps.find(x=>x.id===s).sp=v;else await live.setpoint(s,v);
-   delete edits['sp-'+s];
+   delete edits['sp-'+s];buzz([60,40,60]);
    refresh();
   }
  }catch(err){alert('Command failed: '+err.message)}

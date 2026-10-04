@@ -17,9 +17,11 @@ main{padding:0 1rem 2rem;max-width:900px;margin:auto}
 .btn.arm{background:var(--red);border-color:var(--red);color:#fff}
 .card h3{margin:0 0 .4rem;font-size:1rem}
 .val{font-size:2.2rem;font-weight:800}.val small{font-size:1rem;color:var(--mu)}
-.bar{height:22px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:.4rem}
+.bar{position:relative;height:22px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:.4rem}
 .bar i{display:block;height:100%;background:var(--blu)}
 .bar.warn i{background:var(--amb)}.bar.alarm i{background:var(--red)}
+.tick{position:absolute;top:0;bottom:0;width:3px;background:var(--tx);opacity:.8}.spark{width:100%;height:28px;margin-top:.4rem;color:var(--blu)}
+input:disabled,.btn:disabled{opacity:.45;cursor:not-allowed}
 .dot{width:18px;height:18px;border-radius:50%;background:var(--grn);border:2px solid var(--tx)}.dot.mock{background:var(--amb)}.dot.fail{background:var(--red)}
 .btn{min-height:56px;min-width:56px;padding:0 1.1rem;font:inherit;font-weight:700;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--tx);cursor:pointer}
 .btn.primary{background:var(--amb);color:#111;border-color:var(--amb)}
