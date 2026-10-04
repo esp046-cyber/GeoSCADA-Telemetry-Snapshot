@@ -50,9 +50,22 @@
   <label>Server base URL<input id="base" type="url" placeholder="https://scada.example.org:5481"></label>
   <label>API token<input id="token" type="password" autocomplete="off"></label>
   <label>Refresh (seconds)<input id="poll" type="number" min="2" max="300"></label>
+  <button type="button" id="tagBtn" class="btn wide">Configure tags &amp; endpoints</button>
   <div class="row"><button value="cancel" class="btn ghost">Cancel</button><button id="save" value="ok" class="btn primary">Save</button></div>
  </form>
 </dialog>
+<dialog id="cdlg">
+ <h2>Tags &amp; endpoints</h2>
+ <p class="muted">Paths are relative to the server base URL. {id} is the tag ID, {v} is the setpoint.</p>
+ <div id="epf"></div>
+ <h2>Tags</h2><div id="tagrows"></div>
+ <div class="row"><button type="button" class="btn" id="addTank">+ Tank</button><button type="button" class="btn" id="addPump">+ Pump</button></div>
+ <label>Config JSON (export here, paste to share between devices)<textarea id="cjson" rows="6"></textarea></label>
+ <div class="row"><button type="button" class="btn" id="cexp">Export</button><button type="button" class="btn" id="cimp">Import</button><button type="button" class="btn" id="creset">Reset</button></div>
+ <p id="cerr" class="muted" role="alert"></p>
+ <div class="row"><button type="button" class="btn ghost" id="ccancel">Cancel</button><button type="button" class="btn primary" id="csave">Save</button></div>
+</dialog>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

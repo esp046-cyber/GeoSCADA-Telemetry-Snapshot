@@ -5,30 +5,40 @@ const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch
 const cfg=Object.assign({mock:true,base:'',token:'',poll:5,day:false},store.get('gs_cfg',{}));
 
 /* ---- Mock data (same shape the adapter returns) ---- */
-const mock={
- tanks:[{id:'R01',name:'Reservoir R1',v:72.4,unit:'%',lo:20,hi:92},{id:'R02',name:'Break Pressure Tank BPT-3',v:48.9,unit:'%',lo:25,hi:90},{id:'R03',name:'Sump WW-12',v:81.6,unit:'%',lo:10,hi:85}],
- alarms:[{id:'A1001',tag:'WW-12.LevelHigh',text:'Wet well high level',sev:'HIGH',time:new Date(Date.now()-420000).toISOString(),ack:false},{id:'A1002',tag:'PRV-07.PressLow',text:'PRV-07 outlet pressure low (1.8 bar)',sev:'MED',time:new Date(Date.now()-3600000).toISOString(),ack:false}],
- pumps:[{id:'P01',name:'Booster Pump 1',run:true,mode:'AUTO',sp:4.2,unit:'bar',min:0,max:8},{id:'P02',name:'Macerator Pump 2',run:false,mode:'OFF',sp:35,unit:'Hz',min:0,max:50}]
-};
-function mockTick(){mock.tanks.forEach(t=>{t.v=Math.min(100,Math.max(0,+(t.v+(Math.random()-.5)*1.2).toFixed(1)))})}
+const mock={tanks:[],pumps:[],alarms:[{id:'A1001',tag:'WW-12.LevelHigh',text:'Wet well high level',sev:'HIGH',time:new Date(Date.now()-420000).toISOString(),ack:false},{id:'A1002',tag:'PRV-07.PressLow',text:'PRV-07 outlet pressure low',sev:'MED',time:new Date(Date.now()-3600000).toISOString(),ack:false}]};
+function buildMock(){let i=0;mock.tanks=TC.tags.filter(t=>t.k==='tank').map(t=>({id:t.id,name:t.name,unit:t.unit,lo:t.lo,hi:t.hi,v:+(t.lo+(t.hi-t.lo)*(i++===2?.95:.6)).toFixed(1)}));i=0;mock.pumps=TC.tags.filter(t=>t.k==='pump').map(t=>({id:t.id,name:t.name,unit:t.unit,min:t.lo,max:t.hi,run:!i,mode:i++?'OFF':'AUTO',sp:+((t.lo+t.hi)/2).toFixed(1)}))}
+buildMock();
+function mockTick(){mock.tanks.forEach(t=>{t.v=Math.min(t.hi*1.1,Math.max(0,+(t.v+(Math.random()-.5)*(t.hi-t.lo)/60).toFixed(1)))})}
 
 /* ---- Adapter: edit paths here to match your GeoSCADA REST gateway ---- */
 async function api(path,opt={}){
+ if(!/^\/(?!\/)/.test(path))throw new Error('Bad path in config');
  const r=await fetch(cfg.base.replace(/\/$/,'')+path,{...opt,headers:{'Content-Type':'application/json',...(cfg.token?{Authorization:'Bearer '+cfg.token}:{})}});
  if(!r.ok)throw new Error('HTTP '+r.status);
  return r.status===204?null:r.json();
 }
 const live={
- snapshot:async()=>({tanks:await api('/api/tanks'),alarms:await api('/api/alarms?state=active'),pumps:await api('/api/pumps')}),
- ack:id=>api('/api/alarms/'+encodeURIComponent(id)+'/ack',{method:'POST',body:'{}'}),
- setpoint:(id,v)=>api('/api/pumps/'+encodeURIComponent(id)+'/setpoint',{method:'PUT',body:JSON.stringify({value:v})})
+ snapshot:async()=>{const e=TC.ep,m=e.am;
+  const rows=await Promise.all(TC.tags.map(t=>api(fill(e.read,{id:encodeURIComponent(t.id)}))));
+  const tanks=[],pumps=[];
+  TC.tags.forEach((t,i)=>{const r=rows[i],n=+getp(r,e.val);
+   if(!isFinite(n))throw new Error('Tag '+t.id+': no number at "'+e.val+'"');
+   if(t.k==='pump')pumps.push({id:t.id,name:t.name,unit:t.unit,min:t.lo,max:t.hi,sp:n,run:e.run?!!getp(r,e.run):true,mode:e.mode?String(getp(r,e.mode)||'').toUpperCase():'AUTO'});
+   else tanks.push({id:t.id,name:t.name,unit:t.unit,lo:t.lo,hi:t.hi,v:n})});
+  let j=await api(e.alarms);if(e.alarmList)j=getp(j,e.alarmList);
+  const alarms=(Array.isArray(j)?j:[]).map(a=>({id:getp(a,m.id),tag:getp(a,m.tag),text:getp(a,m.text),sev:String(getp(a,m.sev)||'MED').toUpperCase(),time:getp(a,m.time),ack:!!getp(a,m.ack)}));
+  return {tanks,alarms,pumps}},
+ ack:id=>api(fill(TC.ep.ack,{id:encodeURIComponent(id)}),{method:'POST',body:'{}'}),
+ setpoint:(id,v)=>api(fill(TC.ep.write,{id:encodeURIComponent(id)}),{method:TC.ep.wmethod,body:fill(TC.ep.wbody,{id:JSON.stringify(String(id)).slice(1,-1),v})})
 };
+function applyCfg(){buildMock();for(const k in hist)delete hist[k];data=null;store.set('gs_last',null);['#tanks','#alarms','#pumps'].forEach(x=>$(x).innerHTML='');start()}
 
 /* ---- State & render ---- */
 let data=store.get('gs_last',null),stale=false,timer,armed=null,armT;const edits={},hist={};let fails=0;
+const sc=t=>t.hi*1.15||100;
 const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch{}};
 function track(){const n=Date.now();data.tanks.forEach(t=>{const h=hist[t.id]=(hist[t.id]||[]).filter(p=>n-p.t<9e5);h.push({t:n,v:t.v})})}
-function spark(id){const h=hist[id];if(!h||h.length<2)return'';const n=Date.now();return `<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="15 minute trend"><polyline fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" points="${h.map(p=>((p.t-(n-9e5))/9e5*100).toFixed(1)+','+(24-Math.min(100,Math.max(0,p.v))*.24).toFixed(1)).join(' ')}"/></svg><p class="muted">15 min trend</p>`}
+function spark(id){const h=hist[id];if(!h||h.length<2)return'';const n=Date.now(),vs=h.map(p=>p.v),lo=Math.min(...vs),sp=(Math.max(...vs)-lo)||1;return `<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="15 minute trend"><polyline fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" points="${h.map(p=>((p.t-(n-9e5))/9e5*100).toFixed(1)+','+(22-(p.v-lo)/sp*20).toFixed(1)).join(' ')}"/></svg><p class="muted">15 min trend (auto-scaled)</p>`}
 const busy=()=>armed||(document.activeElement&&document.activeElement.closest&&document.activeElement.closest('#pumps'));
 function renderPumps(){
  $('#pumps').innerHTML=data.pumps.map(p=>`<div class="card"><h3>${esc(p.name)} <span class="${p.run?'run':'stop'}">${p.run?'RUNNING':'STOPPED'}</span> <span class="mode">${esc(p.mode||'—')}</span></h3><div class="val">${p.sp}<small> ${esc(p.unit)}</small></div><div class="sp"><input type="number" inputmode="decimal" step="any" min="${p.min}" max="${p.max}" value="${edits['sp-'+p.id]??p.sp}" aria-label="New setpoint for ${esc(p.name)}" id="sp-${esc(p.id)}"${p.mode==='AUTO'?'':' disabled'}><button class="btn primary${armed===p.id?' arm':''}" data-sp="${esc(p.id)}"${p.mode==='AUTO'?'':' disabled'}>${armed===p.id?'Confirm?':'Set'}</button></div><p class="muted">Range ${p.min}–${p.max} ${esc(p.unit)}${p.mode==='AUTO'?'':' · <b>Locked: AUTO required</b>'}</p></div>`).join('');
@@ -36,7 +46,7 @@ function renderPumps(){
 document.addEventListener('input',e=>{if(e.target.id&&e.target.id.startsWith('sp-')){edits[e.target.id]=e.target.value;if(armed){armed=null;document.querySelectorAll('.arm').forEach(b=>{b.textContent='Set';b.classList.remove('arm')})}}});
 function render(){
  if(!data)return;
- $('#tanks').innerHTML=data.tanks.map(t=>{const st=(t.v<=t.lo||t.v>=t.hi)?'alarm':(t.v<=t.lo+5||t.v>=t.hi-5)?'warn':'';return `<div class="card ${st==='alarm'?'alarm':''}"><h3>${esc(t.name)}</h3><div class="val">${t.v}<small> ${esc(t.unit)}</small></div><div class="bar ${st}" role="progressbar" aria-valuenow="${t.v}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100,t.v)}%"></i><b class="tick" style="left:${t.lo}%"></b><b class="tick" style="left:${t.hi}%"></b></div>${spark(t.id)}<p class="muted">Limits ${t.lo}–${t.hi} ${esc(t.unit)}${st?' · <b>'+(st==='alarm'?'LIMIT BREACH':'NEAR LIMIT')+'</b>':''}</p></div>`}).join('');
+ $('#tanks').innerHTML=data.tanks.map(t=>{const m=(t.hi-t.lo)*.07,st=(t.v<=t.lo||t.v>=t.hi)?'alarm':(t.v<=t.lo+m||t.v>=t.hi-m)?'warn':'';return `<div class="card ${st==='alarm'?'alarm':''}"><h3>${esc(t.name)}</h3><div class="val">${t.v}<small> ${esc(t.unit)}</small></div><div class="bar ${st}" role="progressbar" aria-valuenow="${t.v}" aria-valuemin="0" aria-valuemax="${Math.round(sc(t))}"><i style="width:${Math.min(100,t.v/sc(t)*100)}%"></i><b class="tick" style="left:${t.lo/sc(t)*100}%"></b><b class="tick" style="left:${t.hi/sc(t)*100}%"></b></div>${spark(t.id)}<p class="muted">Limits ${t.lo}–${t.hi} ${esc(t.unit)}${st?' · <b>'+(st==='alarm'?'LIMIT BREACH':'NEAR LIMIT')+'</b>':''}</p></div>`}).join('');
  $('#alarms').innerHTML=data.alarms.length?data.alarms.map(a=>`<div class="card alm s-${esc(a.sev)}${a.ack?' ackd':''}"><div><span class="sev">${esc(a.sev)}</span> ${esc(a.text)}<p class="muted">${esc(a.tag)} · ${new Date(a.time).toLocaleTimeString()}${a.ack?' · acknowledged':''}</p></div>${a.ack?'':`<button class="btn primary" data-ack="${esc(a.id)}">Ack</button>`}</div>`).join(''):'<p class="muted">No active alarms.</p>';
  if(!busy())renderPumps();
  const b=$('#badge');b.textContent=cfg.mock?'MOCK':stale?'STALE':'LIVE';b.className='badge '+(cfg.mock?'':stale?'stale':'live');
